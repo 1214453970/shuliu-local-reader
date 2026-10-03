@@ -8,7 +8,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=6" />
+  <link rel="stylesheet" href="./styles.css?v=7" />
   <title>书留 · 本地 AI 精读</title>
 </head>
 <body>
@@ -32,6 +32,7 @@
             <option value="Korean">韩语</option>
           </select>
         </label>
+        <button id="sentenceButton" class="button ghost">难句本</button>
         <button id="vocabButton" class="button ghost">生词本 <span id="dueBadge"></span></button>
         <button id="settingsButton" class="button ghost">API 设置</button>
       </div>
@@ -83,6 +84,7 @@
             </div>
           </div>
           <nav id="chapterNav" class="chapter-nav" aria-label="章节导航"></nav>
+          <div class="reading-mode"><button id="parallelToggle" class="button ghost compact" type="button">开启逐段对照</button><button id="sourceMaskToggle" class="button ghost compact hidden" type="button">遮挡原文</button><button id="translationMaskToggle" class="button ghost compact hidden" type="button">遮挡译文</button><small>只显示已精译的段落，不会自动调用 API</small></div>
           <article id="bookContent" class="book-content"></article>
         </div>
       </section>
@@ -99,6 +101,7 @@
     </header>
     <div class="sheet-body">
       <section class="source-card"><div class="source-card-head"><span>原文</span><input id="quickWordInput" class="quick-word-input" type="text" placeholder="输入原文中的单词或短语" aria-label="要收藏的单词或短语"><button id="saveParagraphWord" class="button ghost compact">＋ 收藏词条</button></div><p id="selectedParagraph"></p></section>
+      <section class="practice-box"><h3>先译后看 · 自己动笔</h3><p>先写自己的译文，再看参考译文。草稿仅存于本机；点击 AI 批改才会发送当前段落和你的译文。</p><textarea id="practiceDraft" placeholder="试着把上面的中文翻译成目标语言……" aria-label="自己的译文"></textarea><div class="practice-actions"><button id="saveDraft" class="button ghost compact" type="button">保存草稿</button><button id="gradeDraft" class="button primary compact" type="button">AI 批改（可能收费）</button><button id="saveSentence" class="button ghost compact" type="button">收藏到难句本</button></div><div id="gradeStatus" class="notice hidden"></div><div id="gradeResult" class="hidden"></div></section>
       <div id="analysisSetup" class="analysis-setup">
         <div class="setup-grid">
           <label>目标语言<select id="sheetLanguage"></select></label>
@@ -106,17 +109,19 @@
         </div>
         <label class="switch-row"><span><strong>参考相邻段落</strong><small>提高代词与语境判断；相邻文字也会发给 API</small></span><input id="includeContext" type="checkbox" /><i></i></label>
         <button id="translateButton" class="button primary full">开始精译 <span>→</span></button>
-        <p class="privacy-hint">只发送当前段落，以及你明确允许的上下文。不会上传整本书。</p>
+        <p class="privacy-hint">点击精译会发送当前段落；勾选相邻段落时也发送上下文。每次点击 AI 批改会额外发送你写的译文，并可能由 API 服务商收费；不会上传整本书。</p>
       </div>
       <div id="analysisLoading" class="analysis-loading hidden"><div class="loader"></div><h3>正在拆解这段表达…</h3><p>AI 正在生成译文、结构对应与语法说明。</p></div>
       <div id="analysisError" class="notice error hidden"></div>
+      <div id="revealBox" class="notice info hidden"><strong>先对照自己的译文，再看参考答案。</strong><button id="revealAnalysis" class="button primary compact" type="button">展开参考译文与讲解</button></div>
       <div id="analysisResult" class="analysis-result hidden"></div>
     </div>
   </section>
 
+    <section id="sentenceSheet" class="sheet hidden" aria-labelledby="sentenceTitle" aria-modal="true" role="dialog"><div class="sheet-handle"></div><header class="sheet-header"><div><span class="eyebrow">YOUR SENTENCE DECK</span><h2 id="sentenceTitle">难句本 · 重做练习</h2></div><button id="closeSentence" class="icon-button" aria-label="关闭">×</button></header><div class="sheet-body sentence-body"><p class="privacy-hint">难句、草稿、批改和复习记录仅保存在当前浏览器。打开书籍和段落可重新作答；再次点击 AI 批改可能收费。</p><div id="sentenceList" class="sentence-list"></div></div></section>
     <section id="vocabSheet" class="sheet hidden" aria-labelledby="vocabTitle" aria-modal="true" role="dialog">
     <div class="sheet-handle"></div><header class="sheet-header"><div><span class="eyebrow">YOUR WORD DECK</span><h2 id="vocabTitle">生词本 · 间隔复习</h2></div><button id="closeVocab" class="icon-button" aria-label="关闭">×</button></header>
-    <div class="sheet-body vocab-body"><div id="vocabOverview" class="vocab-overview"></div><div class="vocab-toolbar"><button id="startReview" class="button primary">开始今日复习</button><button id="addWordToggle" class="button ghost">＋ 手动添加</button><button id="exportWords" class="button ghost">导出生词本</button><label class="button ghost import-words-label" for="importWordsFile">导入备份</label><input id="importWordsFile" type="file" accept="application/json,.json" hidden><label class="include-books-option"><input id="includeBooksExport" type="checkbox">备份时包含本地书籍正文</label><input id="vocabSearch" type="search" placeholder="搜索单词或释义" aria-label="搜索生词"></div><form id="manualWordForm" class="manual-word-form hidden"><input name="word" required placeholder="单词或短语"><input name="meaning" placeholder="中文释义"><input name="partOfSpeech" placeholder="词性（可选）"><textarea name="example" placeholder="例句（可选）"></textarea><button class="button primary" type="submit">保存词条</button></form><div class="backup-note">备份文件只下载到你的设备；默认不包含书籍。选择“包含本地书籍正文”后，导出文件会含完整书籍内容，请妥善保管。</div><div class="review-mode-row"><span>卡片方向</span><button id="reviewDirection" class="button ghost compact" type="button">外语 → 中文</button></div><div id="reviewCard" class="review-card hidden"></div><div id="vocabList" class="vocab-list"></div><p class="privacy-hint">仅保存在此浏览器。复习间隔是可调整的记忆曲线启发，不是固定的科学定律。</p></div>
+    <div class="sheet-body vocab-body"><div id="vocabOverview" class="vocab-overview"></div><div class="vocab-toolbar"><button id="startReview" class="button primary">开始今日复习</button><button id="addWordToggle" class="button ghost">＋ 手动添加</button><button id="exportWords" class="button ghost">导出生词本</button><label class="button ghost import-words-label" for="importWordsFile">导入备份</label><input id="importWordsFile" type="file" accept="application/json,.json" hidden><label class="include-books-option"><input id="includeBooksExport" type="checkbox">备份时包含本地书籍正文</label><input id="vocabSearch" type="search" placeholder="搜索单词或释义" aria-label="搜索生词"></div><form id="manualWordForm" class="manual-word-form hidden"><input name="word" required placeholder="单词或短语"><input name="meaning" placeholder="中文释义"><input name="partOfSpeech" placeholder="词性（可选）"><textarea name="example" placeholder="例句（可选）"></textarea><button class="button primary" type="submit">保存词条</button></form><div class="backup-note">备份文件只下载到你的设备；包含生词、收藏难句的段落原文、草稿和批改，默认不包含整本书。选择“包含本地书籍正文”后，导出文件会含完整书籍内容，请妥善保管。</div><div class="review-mode-row"><span>卡片方向</span><button id="reviewDirection" class="button ghost compact" type="button">外语 → 中文</button></div><div id="reviewCard" class="review-card hidden"></div><div id="vocabList" class="vocab-list"></div><p class="privacy-hint">仅保存在此浏览器。复习间隔是可调整的记忆曲线启发，不是固定的科学定律。</p></div>
   </section>
   <section id="settingsModal" class="modal hidden" aria-labelledby="settingsTitle" aria-modal="true" role="dialog">
     <header class="modal-header"><div><span class="eyebrow">CONNECTION</span><h2 id="settingsTitle">连接你自己的 AI</h2></div><button id="closeSettings" class="icon-button" aria-label="关闭">×</button></header>
@@ -141,6 +146,6 @@
 
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="./vendor/jszip.min.js?v=3"></script>
-  <script type="module" src="./app.js?v=6"></script>
+  <script type="module" src="./app.js?v=7"></script>
 </body>
 </html>
