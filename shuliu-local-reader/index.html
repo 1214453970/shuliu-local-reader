@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f6f2ea" />
+  <meta name="description" content="书留——书籍保存在本地，按段落进行 AI 精译与语法讲解。" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <link rel="stylesheet" href="./styles.css?v=6" />
+  <title>书留 · 本地 AI 精读</title>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <header class="topbar">
+      <button id="libraryToggle" class="icon-button mobile-only" aria-label="打开书架">☰</button>
+      <a class="brand" href="#" aria-label="书留首页">
+        <span class="brand-mark">留</span>
+        <span><strong>书留</strong><small>本地 AI 精读</small></span>
+      </a>
+      <div class="topbar-actions">
+        <label class="compact-field" title="目标语言">
+          <span>译为</span>
+          <select id="targetLanguage">
+            <option value="English">英语</option>
+            <option value="Russian">俄语</option>
+            <option value="Japanese">日语</option>
+            <option value="French">法语</option>
+            <option value="German">德语</option>
+            <option value="Spanish">西班牙语</option>
+            <option value="Korean">韩语</option>
+          </select>
+        </label>
+        <button id="vocabButton" class="button ghost">生词本 <span id="dueBadge"></span></button>
+        <button id="settingsButton" class="button ghost">API 设置</button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside id="libraryPanel" class="library-panel">
+        <div class="panel-heading">
+          <div><span class="eyebrow">LIBRARY</span><h2>我的书架</h2></div>
+          <button id="closeLibrary" class="icon-button mobile-only" aria-label="关闭书架">×</button>
+        </div>
+        <label class="import-button" for="bookInput">
+          <span class="plus">＋</span>
+          <span><strong>导入书籍</strong><small>EPUB 或 TXT，文件不会上传</small></span>
+        </label>
+        <input id="bookInput" type="file" accept=".epub,.txt,text/plain,application/epub+zip" hidden />
+        <div id="encodingRow" class="encoding-row">
+          <label for="txtEncoding">TXT 编码</label>
+          <select id="txtEncoding">
+            <option value="utf-8">UTF-8</option>
+            <option value="gb18030">GBK / GB18030</option>
+            <option value="big5">Big5</option>
+          </select>
+        </div>
+        <div id="bookList" class="book-list"></div>
+        <div class="local-note">
+          <span class="shield">◇</span>
+          <p><strong>本地优先</strong><br />书籍与阅读记录保存在此设备。只有你主动精译的文字会发往所配置的 AI API。</p>
+        </div>
+      </aside>
+
+      <section class="reader-panel">
+        <div id="emptyState" class="empty-state">
+          <div class="empty-art" aria-hidden="true"><span>中</span><i></i><span>A</span></div>
+          <span class="eyebrow">YOUR PRIVATE READING DESK</span>
+          <h1>让每一段中文，<br />都有清楚的外语表达。</h1>
+          <p>导入 EPUB 或 TXT，点击段落，获得自然译文、直译对照、语法结构、重点词与翻译理由。</p>
+          <div class="hero-actions"><label class="button primary large" for="bookInput">导入第一本书</label><button id="demoButton" class="button ghost large">试读示例</button></div>
+          <div class="feature-pills"><span>书籍不上云</span><span>自带 API</span><span>可安装到主屏幕</span></div>
+        </div>
+
+        <div id="readerView" class="reader-view hidden">
+          <div class="reader-toolbar">
+            <button id="backToBooks" class="icon-button mobile-only" aria-label="返回书架">☰</button>
+            <div class="reader-title"><span id="chapterEyebrow" class="eyebrow">正在阅读</span><h1 id="bookTitle"></h1></div>
+            <div class="reader-controls">
+              <button id="fontDown" class="icon-button text-button" aria-label="减小字号">A−</button>
+              <button id="fontUp" class="icon-button text-button" aria-label="增大字号">A＋</button>
+            </div>
+          </div>
+          <nav id="chapterNav" class="chapter-nav" aria-label="章节导航"></nav>
+          <article id="bookContent" class="book-content"></article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="backdrop" class="backdrop hidden"></div>
+
+  <section id="analysisSheet" class="sheet hidden" aria-labelledby="analysisTitle" aria-modal="true" role="dialog">
+    <div class="sheet-handle"></div>
+    <header class="sheet-header">
+      <div><span class="eyebrow">INTENSIVE TRANSLATION</span><h2 id="analysisTitle">段落精译</h2></div>
+      <button id="closeAnalysis" class="icon-button" aria-label="关闭">×</button>
+    </header>
+    <div class="sheet-body">
+      <section class="source-card"><div class="source-card-head"><span>原文</span><input id="quickWordInput" class="quick-word-input" type="text" placeholder="输入原文中的单词或短语" aria-label="要收藏的单词或短语"><button id="saveParagraphWord" class="button ghost compact">＋ 收藏词条</button></div><p id="selectedParagraph"></p></section>
+      <div id="analysisSetup" class="analysis-setup">
+        <div class="setup-grid">
+          <label>目标语言<select id="sheetLanguage"></select></label>
+          <label>解析深度<select id="analysisDepth"><option value="standard">标准</option><option value="brief">简洁</option><option value="deep">深入</option></select></label>
+        </div>
+        <label class="switch-row"><span><strong>参考相邻段落</strong><small>提高代词与语境判断；相邻文字也会发给 API</small></span><input id="includeContext" type="checkbox" /><i></i></label>
+        <button id="translateButton" class="button primary full">开始精译 <span>→</span></button>
+        <p class="privacy-hint">只发送当前段落，以及你明确允许的上下文。不会上传整本书。</p>
+      </div>
+      <div id="analysisLoading" class="analysis-loading hidden"><div class="loader"></div><h3>正在拆解这段表达…</h3><p>AI 正在生成译文、结构对应与语法说明。</p></div>
+      <div id="analysisError" class="notice error hidden"></div>
+      <div id="analysisResult" class="analysis-result hidden"></div>
+    </div>
+  </section>
+
+    <section id="vocabSheet" class="sheet hidden" aria-labelledby="vocabTitle" aria-modal="true" role="dialog">
+    <div class="sheet-handle"></div><header class="sheet-header"><div><span class="eyebrow">YOUR WORD DECK</span><h2 id="vocabTitle">生词本 · 间隔复习</h2></div><button id="closeVocab" class="icon-button" aria-label="关闭">×</button></header>
+    <div class="sheet-body vocab-body"><div id="vocabOverview" class="vocab-overview"></div><div class="vocab-toolbar"><button id="startReview" class="button primary">开始今日复习</button><button id="addWordToggle" class="button ghost">＋ 手动添加</button><button id="exportWords" class="button ghost">导出生词本</button><label class="button ghost import-words-label" for="importWordsFile">导入备份</label><input id="importWordsFile" type="file" accept="application/json,.json" hidden><label class="include-books-option"><input id="includeBooksExport" type="checkbox">备份时包含本地书籍正文</label><input id="vocabSearch" type="search" placeholder="搜索单词或释义" aria-label="搜索生词"></div><form id="manualWordForm" class="manual-word-form hidden"><input name="word" required placeholder="单词或短语"><input name="meaning" placeholder="中文释义"><input name="partOfSpeech" placeholder="词性（可选）"><textarea name="example" placeholder="例句（可选）"></textarea><button class="button primary" type="submit">保存词条</button></form><div class="backup-note">备份文件只下载到你的设备；默认不包含书籍。选择“包含本地书籍正文”后，导出文件会含完整书籍内容，请妥善保管。</div><div class="review-mode-row"><span>卡片方向</span><button id="reviewDirection" class="button ghost compact" type="button">外语 → 中文</button></div><div id="reviewCard" class="review-card hidden"></div><div id="vocabList" class="vocab-list"></div><p class="privacy-hint">仅保存在此浏览器。复习间隔是可调整的记忆曲线启发，不是固定的科学定律。</p></div>
+  </section>
+  <section id="settingsModal" class="modal hidden" aria-labelledby="settingsTitle" aria-modal="true" role="dialog">
+    <header class="modal-header"><div><span class="eyebrow">CONNECTION</span><h2 id="settingsTitle">连接你自己的 AI</h2></div><button id="closeSettings" class="icon-button" aria-label="关闭">×</button></header>
+    <div class="modal-body">
+      <div class="notice info"><strong>你的密钥只存于当前浏览器。</strong><br />本应用没有服务器。所填中转站必须允许浏览器跨域请求（CORS）。</div>
+      <label class="field"><span>API 地址</span><input id="apiBaseUrl" type="url" placeholder="https://example.com/v1" autocomplete="off" /><small>可填到 /v1；也可直接填完整的 /chat/completions 地址。</small></label>
+      <label class="field"><span>API Key</span><div class="input-with-action"><input id="apiKey" type="password" placeholder="sk-..." autocomplete="off" /><button id="toggleKey" type="button">显示</button></div></label>
+      <label class="field">
+        <span>模型</span>
+        <div class="model-picker-row">
+          <select id="modelSelect" aria-label="选择已拉取的模型"><option value="">请先拉取模型</option></select>
+          <button id="fetchModels" type="button" class="button ghost">拉取模型</button>
+        </div>
+        <input id="modelName" type="text" placeholder="也可以手动输入模型名称" autocomplete="off" />
+        <small>选择模型后会自动填入。若中转站不开放 /models 或不允许浏览器跨域，仍可手动填写。</small>
+      </label>
+      <details class="advanced"><summary>高级选项</summary><label class="switch-row"><span><strong>请求 JSON 模式</strong><small>若中转站不兼容，应用会自动回退一次</small></span><input id="jsonMode" type="checkbox" checked /><i></i></label></details>
+      <div id="connectionStatus" class="notice hidden"></div>
+    </div>
+    <footer class="modal-footer"><button id="testConnection" class="button ghost">测试连接</button><button id="saveSettings" class="button primary">保存设置</button></footer>
+  </section>
+
+  <div id="toast" class="toast hidden" role="status"></div>
+  <script src="./vendor/jszip.min.js?v=3"></script>
+  <script type="module" src="./app.js?v=6"></script>
+</body>
+</html>
