@@ -8,7 +8,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=7" />
+  <link rel="stylesheet" href="./styles.css?v=8" />
   <title>书留 · 本地 AI 精读</title>
 </head>
 <body>
@@ -23,6 +23,7 @@
         <label class="compact-field" title="目标语言">
           <span>译为</span>
           <select id="targetLanguage">
+            <option value="Chinese">中文</option>
             <option value="English">英语</option>
             <option value="Russian">俄语</option>
             <option value="Japanese">日语</option>
@@ -69,7 +70,7 @@
           <div class="empty-art" aria-hidden="true"><span>中</span><i></i><span>A</span></div>
           <span class="eyebrow">YOUR PRIVATE READING DESK</span>
           <h1>让每一段中文，<br />都有清楚的外语表达。</h1>
-          <p>导入 EPUB 或 TXT，点击段落，获得自然译文、直译对照、语法结构、重点词与翻译理由。</p>
+          <p>导入 EPUB 或 TXT，在阅读页设置原文语言，选择目标语言并点击段落，获得自然译文、直译对照、语法结构、重点词与翻译理由。</p>
           <div class="hero-actions"><label class="button primary large" for="bookInput">导入第一本书</label><button id="demoButton" class="button ghost large">试读示例</button></div>
           <div class="feature-pills"><span>书籍不上云</span><span>自带 API</span><span>可安装到主屏幕</span></div>
         </div>
@@ -84,7 +85,20 @@
             </div>
           </div>
           <nav id="chapterNav" class="chapter-nav" aria-label="章节导航"></nav>
-          <div class="reading-mode"><button id="parallelToggle" class="button ghost compact" type="button">开启逐段对照</button><button id="sourceMaskToggle" class="button ghost compact hidden" type="button">遮挡原文</button><button id="translationMaskToggle" class="button ghost compact hidden" type="button">遮挡译文</button><small>只显示已精译的段落，不会自动调用 API</small></div>
+          <div class="reading-mode"><label class="source-language-field" title="原文语言">
+          <span>原文</span>
+          <select id="sourceLanguage">
+            <option value="Chinese">中文</option>
+            <option value="English">英语</option>
+            <option value="Russian">俄语</option>
+            <option value="Japanese">日语</option>
+            <option value="French">法语</option>
+            <option value="German">德语</option>
+            <option value="Spanish">西语</option>
+            <option value="Korean">韩语</option>
+          </select>
+        </label>
+          <button id="parallelToggle" class="button ghost compact" type="button">开启逐段对照</button><button id="sourceMaskToggle" class="button ghost compact hidden" type="button">遮挡原文</button><button id="translationMaskToggle" class="button ghost compact hidden" type="button">遮挡译文</button><small>只显示已精译的段落，不会自动调用 API</small></div>
           <article id="bookContent" class="book-content"></article>
         </div>
       </section>
@@ -101,10 +115,10 @@
     </header>
     <div class="sheet-body">
       <section class="source-card"><div class="source-card-head"><span>原文</span><input id="quickWordInput" class="quick-word-input" type="text" placeholder="输入原文中的单词或短语" aria-label="要收藏的单词或短语"><button id="saveParagraphWord" class="button ghost compact">＋ 收藏词条</button></div><p id="selectedParagraph"></p></section>
-      <section class="practice-box"><h3>先译后看 · 自己动笔</h3><p>先写自己的译文，再看参考译文。草稿仅存于本机；点击 AI 批改才会发送当前段落和你的译文。</p><textarea id="practiceDraft" placeholder="试着把上面的中文翻译成目标语言……" aria-label="自己的译文"></textarea><div class="practice-actions"><button id="saveDraft" class="button ghost compact" type="button">保存草稿</button><button id="gradeDraft" class="button primary compact" type="button">AI 批改（可能收费）</button><button id="saveSentence" class="button ghost compact" type="button">收藏到难句本</button></div><div id="gradeStatus" class="notice hidden"></div><div id="gradeResult" class="hidden"></div></section>
+      <section class="practice-box"><h3>先译后看 · 自己动笔</h3><p>先写自己的译文，再看参考译文。草稿仅存于本机；点击 AI 批改才会发送当前段落和你的译文。</p><textarea id="practiceDraft" placeholder="试着把上面的原文翻译成目标语言……" aria-label="自己的译文"></textarea><div class="practice-actions"><button id="saveDraft" class="button ghost compact" type="button">保存草稿</button><button id="gradeDraft" class="button primary compact" type="button">AI 批改（可能收费）</button><button id="saveSentence" class="button ghost compact" type="button">收藏到难句本</button></div><div id="gradeStatus" class="notice hidden"></div><div id="gradeResult" class="hidden"></div></section>
       <div id="analysisSetup" class="analysis-setup">
         <div class="setup-grid">
-          <label>目标语言<select id="sheetLanguage"></select></label>
+          <label>原文语言<select id="sheetSourceLanguage"></select></label><label>目标语言<select id="sheetLanguage"></select></label>
           <label>解析深度<select id="analysisDepth"><option value="standard">标准</option><option value="brief">简洁</option><option value="deep">深入</option></select></label>
         </div>
         <label class="switch-row"><span><strong>参考相邻段落</strong><small>提高代词与语境判断；相邻文字也会发给 API</small></span><input id="includeContext" type="checkbox" /><i></i></label>
@@ -146,6 +160,6 @@
 
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="./vendor/jszip.min.js?v=3"></script>
-  <script type="module" src="./app.js?v=7"></script>
+  <script type="module" src="./app.js?v=8"></script>
 </body>
 </html>
