@@ -5,7 +5,7 @@ const els = {
   libraryPanel: $('#libraryPanel'), libraryToggle: $('#libraryToggle'), closeLibrary: $('#closeLibrary'),
   bookInput: $('#bookInput'), txtEncoding: $('#txtEncoding'), bookList: $('#bookList'),
   emptyState: $('#emptyState'), readerView: $('#readerView'), bookTitle: $('#bookTitle'), chapterEyebrow: $('#chapterEyebrow'), readerProgress: $('#readerProgress'),
-  chapterNav: $('#chapterNav'), bookContent: $('#bookContent'), sourceLanguage: $('#sourceLanguage'), sheetSourceLanguage: $('#sheetSourceLanguage'), targetLanguage: $('#targetLanguage'), prevChapter: $('#prevChapter'), nextChapter: $('#nextChapter'), prevChapterBottom: $('#prevChapterBottom'), nextChapterBottom: $('#nextChapterBottom'),
+  chapterNav: $('#chapterNav'), chapterJumpInput: $('#chapterJumpInput'), chapterJumpButton: $('#chapterJumpButton'), chapterRange: $('#chapterRange'), chapterTotal: $('#chapterTotal'), bookContent: $('#bookContent'), sourceLanguage: $('#sourceLanguage'), sheetSourceLanguage: $('#sheetSourceLanguage'), targetLanguage: $('#targetLanguage'), prevChapter: $('#prevChapter'), nextChapter: $('#nextChapter'), prevChapterBottom: $('#prevChapterBottom'), nextChapterBottom: $('#nextChapterBottom'),
   sheetLanguage: $('#sheetLanguage'), analysisDepth: $('#analysisDepth'), includeContext: $('#includeContext'),
   analysisSheet: $('#analysisSheet'), selectedParagraph: $('#selectedParagraph'), closeAnalysis: $('#closeAnalysis'),
   analysisSetup: $('#analysisSetup'), analysisLoading: $('#analysisLoading'), analysisResult: $('#analysisResult'), followupBox: $('#followupBox'), followupMessages: $('#followupMessages'), followupInput: $('#followupInput'), askFollowup: $('#askFollowup'), followupStatus: $('#followupStatus'),
@@ -171,6 +171,9 @@ function updateChapterControls() {
   const total=book.chapters.length, index=state.currentChapter, title=chapterDisplayTitle(book,book.chapters[index],index);
   els.chapterEyebrow.textContent='第 '+(index+1)+' / '+total+' 章';
   els.readerProgress.textContent=title+' · '+(index+1)+' / '+total;
+  if(els.chapterJumpInput)els.chapterJumpInput.value=String(index+1);
+  if(els.chapterTotal)els.chapterTotal.textContent=String(total);
+  if(els.chapterRange){els.chapterRange.max=String(Math.max(0,total-1));els.chapterRange.value=String(index);}
   [els.prevChapter,els.prevChapterBottom].forEach(button=>{if(button)button.disabled=index<=0;});
   [els.nextChapter,els.nextChapterBottom].forEach(button=>{if(button)button.disabled=index>=total-1;});
 }
@@ -462,7 +465,10 @@ function closeLibrary(){els.libraryPanel.classList.remove('open');if(els.analysi
 els.bookInput.addEventListener('change',e=>e.target.files[0]&&importBook(e.target.files[0]));
 els.demoButton.addEventListener('click',async()=>{try{els.sourceLanguage.value='Chinese';const response=await fetch('./sample.txt');const blob=await response.blob();await importBook(new File([blob],'示例中文书.txt',{type:'text/plain'}))}catch(e){toast('示例载入失败')}});
 els.bookList.addEventListener('click',async e=>{const del=e.target.closest('[data-delete]');if(del){e.stopPropagation();const id=del.dataset.delete;const book=state.books.find(x=>x.id===id);if(confirm('从此设备删除《'+book.title+'》？')){await db.delete('books',id);state.books=state.books.filter(x=>x.id!==id);if(state.currentBook?.id===id){state.currentBook=null;els.readerView.classList.add('hidden');els.emptyState.classList.remove('hidden')}renderBookList()}return}const item=e.target.closest('[data-book]');if(item)openBook(item.dataset.book)});
-els.chapterNav.addEventListener('click',e=>{const b=e.target.closest('[data-chapter]');if(b)switchChapter(Number(b.dataset.chapter))});
+els.chapterNav.addEventListener('click',e=>{const b=e.target.closest('[data-chapter]');if(b)switchChapter(Number(b.dataset.chapter))});els.chapterJumpButton?.addEventListener('click',()=>{const total=state.currentBook?.chapters.length||0;const page=Math.max(1,Math.min(total,Number.parseInt(els.chapterJumpInput.value,10)||1));els.chapterJumpInput.value=String(page);switchChapter(page-1);});
+els.chapterJumpInput?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();els.chapterJumpButton.click();}});
+els.chapterRange?.addEventListener('input',()=>{if(els.chapterJumpInput)els.chapterJumpInput.value=String(Number(els.chapterRange.value)+1);});
+els.chapterRange?.addEventListener('change',()=>switchChapter(Number(els.chapterRange.value)));
 els.prevChapter?.addEventListener('click',()=>switchChapter(state.currentChapter-1));els.nextChapter?.addEventListener('click',()=>switchChapter(state.currentChapter+1));els.prevChapterBottom?.addEventListener('click',()=>switchChapter(state.currentChapter-1));els.nextChapterBottom?.addEventListener('click',()=>switchChapter(state.currentChapter+1));
 els.bookContent.addEventListener('click',e=>{const p=e.target.closest('[data-paragraph]');if(p)selectParagraph(Number(p.dataset.paragraph))});
 els.bookContent.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-paragraph]')){e.preventDefault();selectParagraph(Number(e.target.dataset.paragraph))}});
@@ -517,6 +523,9 @@ async function init(){
   showStorageReminder(); if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('./sw.js').catch(console.warn);
 }
 init();
+
+
+
 
 
 

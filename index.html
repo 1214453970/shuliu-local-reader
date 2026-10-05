@@ -8,7 +8,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=11" />
+  <link rel="stylesheet" href="./styles.css?v=13" />
   <title>书留 · 本地 AI 精读</title>
 </head>
 <body>
@@ -86,7 +86,13 @@
               <button id="fontUp" class="icon-button text-button" aria-label="增大字号">A＋</button>
             </div>
           </div>
-          <nav id="chapterNav" class="chapter-nav" aria-label="章节导航"></nav>
+          <nav id="chapterNav" class="chapter-nav" aria-label="章节导航"></nav>          <div class="chapter-jump-bar" aria-label="快速跳转章节">
+            <label for="chapterJumpInput">快速跳转</label>
+            <input id="chapterJumpInput" type="number" inputmode="numeric" min="1" value="1" aria-label="输入章节序号" />
+            <span>/ <b id="chapterTotal">0</b> 章</span>
+            <button id="chapterJumpButton" class="button primary compact" type="button">前往</button>
+            <input id="chapterRange" class="chapter-range" type="range" min="0" max="0" value="0" step="1" aria-label="拖动快速定位章节" />
+          </div>
           <div class="reading-mode"><label class="source-language-field" title="原文语言">
           <span>原文</span>
           <select id="sourceLanguage">
@@ -178,7 +184,9 @@
 
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="./vendor/jszip.min.js?v=3"></script>
-  <script type="module" src="./app.js?v=11"></script>
+  <script type="module" src="./app.js?v=13"></script>
 </body>
 </html>
+
+
 
