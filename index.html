@@ -8,7 +8,7 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
-  <link rel="stylesheet" href="./styles.css?v=13" />
+  <link rel="stylesheet" href="./styles.css?v=14" />
   <title>书留 · 本地 AI 精读</title>
 </head>
 <body>
@@ -82,6 +82,7 @@
             <div class="reader-controls">
               <button id="prevChapter" class="button ghost compact" type="button" aria-label="上一章">‹ 上一章</button>
               <button id="nextChapter" class="button ghost compact" type="button" aria-label="下一章">下一章 ›</button>
+              <button id="searchBookButton" class="button ghost compact" type="button">全文搜索</button>
               <button id="fontDown" class="icon-button text-button" aria-label="减小字号">A−</button>
               <button id="fontUp" class="icon-button text-button" aria-label="增大字号">A＋</button>
             </div>
@@ -113,12 +114,23 @@
             <span id="readerProgress" class="reader-progress"></span>
             <button id="nextChapterBottom" class="button primary" type="button">下一章 ›</button>
           </nav>
+          <div id="quickPageNav" class="quick-page-nav" aria-label="快速翻页">
+            <button id="quickPrevChapter" class="button ghost compact" type="button" aria-label="上一章">‹</button>
+            <label>第 <input id="quickChapterInput" type="number" min="1" inputmode="numeric" aria-label="快速输入章节" /> / <span id="quickChapterTotal">0</span> 章</label>
+            <button id="quickJumpButton" class="button primary compact" type="button">跳转</button>
+            <button id="quickNextChapter" class="button primary compact" type="button" aria-label="下一章">›</button>
+          </div>
         </div>
       </section>
     </main>
   </div>
 
   <div id="backdrop" class="backdrop hidden"></div>
+
+  <section id="searchModal" class="modal search-modal hidden" aria-labelledby="searchTitle" aria-modal="true" role="dialog">
+    <header class="modal-header"><div><span class="eyebrow">LOCAL FULL-TEXT SEARCH</span><h2 id="searchTitle">搜索这本书</h2></div><button id="closeSearch" class="icon-button" aria-label="关闭">×</button></header>
+    <div class="modal-body"><label class="field"><span>关键词</span><input id="bookSearchInput" type="search" placeholder="输入词语或短句，搜索全书正文" autocomplete="off" /></label><p id="searchSummary" class="search-summary">只在本设备已导入的书籍中搜索，不会调用 API。</p><div id="searchResults" class="search-results"></div></div>
+  </section>
 
   <section id="analysisSheet" class="sheet hidden" aria-labelledby="analysisTitle" aria-modal="true" role="dialog">
     <div class="sheet-handle"></div>
@@ -184,7 +196,7 @@
 
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="./vendor/jszip.min.js?v=3"></script>
-  <script type="module" src="./app.js?v=13"></script>
+  <script type="module" src="./app.js?v=14"></script>
 </body>
 </html>
 

@@ -5,7 +5,7 @@ const els = {
   libraryPanel: $('#libraryPanel'), libraryToggle: $('#libraryToggle'), closeLibrary: $('#closeLibrary'),
   bookInput: $('#bookInput'), txtEncoding: $('#txtEncoding'), bookList: $('#bookList'),
   emptyState: $('#emptyState'), readerView: $('#readerView'), bookTitle: $('#bookTitle'), chapterEyebrow: $('#chapterEyebrow'), readerProgress: $('#readerProgress'),
-  chapterNav: $('#chapterNav'), chapterJumpInput: $('#chapterJumpInput'), chapterJumpButton: $('#chapterJumpButton'), chapterRange: $('#chapterRange'), chapterTotal: $('#chapterTotal'), bookContent: $('#bookContent'), sourceLanguage: $('#sourceLanguage'), sheetSourceLanguage: $('#sheetSourceLanguage'), targetLanguage: $('#targetLanguage'), prevChapter: $('#prevChapter'), nextChapter: $('#nextChapter'), prevChapterBottom: $('#prevChapterBottom'), nextChapterBottom: $('#nextChapterBottom'),
+  chapterNav: $('#chapterNav'), chapterJumpInput: $('#chapterJumpInput'), chapterJumpButton: $('#chapterJumpButton'), chapterRange: $('#chapterRange'), chapterTotal: $('#chapterTotal'), bookContent: $('#bookContent'), searchBookButton: $('#searchBookButton'), searchModal: $('#searchModal'), closeSearch: $('#closeSearch'), bookSearchInput: $('#bookSearchInput'), searchResults: $('#searchResults'), searchSummary: $('#searchSummary'), quickPageNav: $('#quickPageNav'), quickPrevChapter: $('#quickPrevChapter'), quickNextChapter: $('#quickNextChapter'), quickChapterInput: $('#quickChapterInput'), quickChapterTotal: $('#quickChapterTotal'), quickJumpButton: $('#quickJumpButton'), sourceLanguage: $('#sourceLanguage'), sheetSourceLanguage: $('#sheetSourceLanguage'), targetLanguage: $('#targetLanguage'), prevChapter: $('#prevChapter'), nextChapter: $('#nextChapter'), prevChapterBottom: $('#prevChapterBottom'), nextChapterBottom: $('#nextChapterBottom'),
   sheetLanguage: $('#sheetLanguage'), analysisDepth: $('#analysisDepth'), includeContext: $('#includeContext'),
   analysisSheet: $('#analysisSheet'), selectedParagraph: $('#selectedParagraph'), closeAnalysis: $('#closeAnalysis'),
   analysisSetup: $('#analysisSetup'), analysisLoading: $('#analysisLoading'), analysisResult: $('#analysisResult'), followupBox: $('#followupBox'), followupMessages: $('#followupMessages'), followupInput: $('#followupInput'), askFollowup: $('#askFollowup'), followupStatus: $('#followupStatus'),
@@ -17,7 +17,7 @@ const els = {
   toggleKey: $('#toggleKey'), fontUp: $('#fontUp'), fontDown: $('#fontDown'), backToBooks: $('#backToBooks'), demoButton: $('#demoButton'), toast: $('#toast'), vocabButton: $('#vocabButton'), vocabSheet: $('#vocabSheet'), closeVocab: $('#closeVocab'), vocabOverview: $('#vocabOverview'), vocabList: $('#vocabList'), vocabSearch: $('#vocabSearch'), startReview: $('#startReview'), reviewCard: $('#reviewCard'), dueBadge: $('#dueBadge'), addWordToggle: $('#addWordToggle'), manualWordForm: $('#manualWordForm'), exportWords: $('#exportWords'), importWordsFile: $('#importWordsFile'), includeBooksExport: $('#includeBooksExport'), reviewDirection: $('#reviewDirection'), sentenceButton: $('#sentenceButton'), sentenceSheet: $('#sentenceSheet'), closeSentence: $('#closeSentence'), sentenceList: $('#sentenceList'), practiceDraft: $('#practiceDraft'), saveDraft: $('#saveDraft'), gradeDraft: $('#gradeDraft'), saveSentence: $('#saveSentence'), gradeStatus: $('#gradeStatus'), gradeResult: $('#gradeResult'), parallelToggle: $('#parallelToggle'), sourceMaskToggle: $('#sourceMaskToggle'), translationMaskToggle: $('#translationMaskToggle'), revealBox: $('#revealBox'), revealAnalysis: $('#revealAnalysis')
 };
 
-const state = { books: [], currentBook: null, currentChapter: 0, selectedIndex: null, fontSize: Number(safeStorage.getItem('readerFontSize') || 19), reviewDirection: safeStorage.getItem('reviewDirection') || 'foreign-first', parallel: false, maskSource: false, maskTranslation: false, currentAnalysis: null, selectionToken: 0, followupMessages: [], activeProfileId: '', touchStart: null };
+const state = { books: [], currentBook: null, currentChapter: 0, selectedIndex: null, fontSize: Number(safeStorage.getItem('readerFontSize') || 19), reviewDirection: safeStorage.getItem('reviewDirection') || 'foreign-first', parallel: false, maskSource: false, maskTranslation: false, currentAnalysis: null, selectionToken: 0, followupMessages: [], activeProfileId: '', touchStart: null, searchTimer: null };
 const SETTINGS_KEY = 'shuliu-api-settings-v1';
 const API_PROFILES_KEY = 'shuliu-api-profiles-v1';
 const PREFS_KEY = 'shuliu-reader-prefs-v1';
@@ -81,19 +81,17 @@ async function parseTxt(file, encoding) {
   try { text = new TextDecoder(encoding).decode(buffer); } catch { text = new TextDecoder('utf-8').decode(buffer); }
   text = text.replace(/^\uFEFF/, '').replace(/\r\n?/g,'\n');
   const lines = text.split('\n'); const marker = /^\s*(第[零〇一二三四五六七八九十百千万两\d]+[章节卷回部篇]|序章|楔子|前言|后记|尾声|引子|Chapter\s+\d+)/i;
-  const chapters = []; let current = { title: '正文', paragraphs: [] }; let bucket = []; let sawChapterMarker = false;
-  const looksLikeTitle = line => { const value=line.trim(); return value && value.length<=80 && (marker.test(value)||(/^(prologue|epilogue|chapter\s+\d+|part\s+\d+)/i.test(value))); };
-  const flushBucket = () => { const p = makeParagraphs(bucket.join('\n')); current.paragraphs.push(...p); bucket = []; };
+  const chapters = []; let current = { title: '正文', paragraphs: [] }; let bucket = [];
+  const looksLikeTitle = line => { const value=line.trim(); return value && value.length<=80 && marker.test(value); };
+  const flushBucket = () => { current.paragraphs.push(...makeParagraphs(bucket.join('\n'))); bucket = []; };
   for (const line of lines) {
     if (looksLikeTitle(line)) {
       flushBucket();
-      if (sawChapterMarker && current.paragraphs.length) chapters.push(current);
-      sawChapterMarker = true;
+      if (current.paragraphs.length) chapters.push(current);
       current = { title: line.trim(), paragraphs: [] };
     } else bucket.push(line);
   }
-  flushBucket(); if (current.paragraphs.length) chapters.push(current);
-  if (!chapters.length) chapters.push({ title:'正文', paragraphs: makeParagraphs(text) });
+  flushBucket(); if (current.paragraphs.length || !chapters.length) chapters.push(current);
   return { title: file.name.replace(/\.txt$/i,''), format:'TXT', chapters };
 }
 
@@ -107,25 +105,42 @@ async function parseEpub(file) {
   if (!opfPath) throw new Error('无法找到 EPUB 内容目录。');
   const opfFile = zip.file(opfPath); if (!opfFile) throw new Error('EPUB 内容目录文件不存在。');
   const opfText = await opfFile.async('string'); const opf = new DOMParser().parseFromString(opfText,'application/xml');
-  const title = opf.querySelector('metadata title, dc\\:title, title')?.textContent?.trim() || file.name.replace(/\.epub$/i,'');
+  const titleNode=opf.querySelector('title') || opf.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/','title')[0]; const title = titleNode?.textContent?.trim() || file.name.replace(/\.epub$/i,'');
   const base = opfPath.includes('/') ? opfPath.slice(0,opfPath.lastIndexOf('/')+1) : '';
   const manifest = new Map(); opf.querySelectorAll('manifest item, item').forEach(item => manifest.set(item.getAttribute('id'), item.getAttribute('href')));
-  const spineIds = [...opf.querySelectorAll('spine itemref, itemref')].map(x=>x.getAttribute('idref')).filter(Boolean);
-  const paths = spineIds.map(id=>manifest.get(id)).filter(Boolean);
+  const spineIds = [...opf.querySelectorAll('spine itemref, itemref')].filter(x=>x.getAttribute('linear')!=='no').map(x=>x.getAttribute('idref')).filter(Boolean);
   const chapters = [];
-  for (let i=0;i<paths.length;i++) {
-    const href = paths[i].split('#')[0]; const fullPath = resolveZipPath(base, href); const entry = zip.file(fullPath);
-    if (!entry) continue;
+  for (let i=0;i<spineIds.length;i++) {
+    const href = manifest.get(spineIds[i]); if(!href)continue;
+    const fullPath = resolveZipPath(base, href.split('#')[0]); const entry = zip.file(fullPath);
+    if (!entry) { console.warn('EPUB spine item missing:',fullPath); continue; }
     const html = await entry.async('string'); const doc = new DOMParser().parseFromString(html,'text/html');
-    doc.querySelectorAll('script,style,nav,svg').forEach(n=>n.remove());
+    doc.querySelectorAll('script,style,nav,svg,form,button,noscript,iframe,header,footer,aside,[hidden],[aria-hidden="true"]').forEach(n=>n.remove());
     const heading = doc.querySelector('h1,h2,h3,title')?.textContent?.trim();
-    let paragraphs = [...doc.querySelectorAll('p,blockquote,li')].map(n=>normalizeText(n.textContent || '')).filter(t=>t.length>0);
-    if (!paragraphs.length) paragraphs = makeParagraphs(doc.body?.innerText || doc.body?.textContent || '');
+    let paragraphs=makeParagraphs(extractEpubText(doc.body));
+    if(heading && paragraphs[0]===normalizeText(heading)) paragraphs.shift();
     if (paragraphs.length) chapters.push({ title: heading || chapterNameFromPath(href,i), paragraphs });
   }
   if (!chapters.length) throw new Error('这本 EPUB 没有解析出可读段落。');
   return { title, format:'EPUB', chapters };
 }
+function extractEpubText(root) {
+  if(!root)return '';
+  const blocks=new Set(['ADDRESS','ARTICLE','BLOCKQUOTE','BR','DD','DIV','DL','DT','FIGCAPTION','FIGURE','H1','H2','H3','H4','H5','H6','LI','OL','P','PRE','SECTION','TABLE','TR']);
+  let out=''; const addBreak=()=>{if(out&&!out.endsWith('\n\n'))out+=out.endsWith('\n')?'\n':'\n\n';};
+  const walk=node=>{
+    if(node.nodeType===Node.TEXT_NODE){out+=node.nodeValue||'';return;}
+    if(node.nodeType!==Node.ELEMENT_NODE)return;
+    const el=node;
+    if(['SCRIPT','STYLE','NAV','SVG','NOSCRIPT','IFRAME'].includes(el.tagName)||el.hidden||el.getAttribute('aria-hidden')==='true')return;
+    const block=blocks.has(el.tagName); if(block)addBreak();
+    if(el.tagName==='BR'){out+='\n';return;}
+    for(const child of el.childNodes)walk(child);
+    if(block)addBreak();
+  };
+  walk(root); return out;
+}
+
 function resolveZipPath(base, href) {
   const parts = (base + decodeURIComponent(href)).split('/'); const out=[];
   for (const part of parts) { if (!part || part==='.') continue; if (part==='..') out.pop(); else out.push(part); }
@@ -174,6 +189,7 @@ function updateChapterControls() {
   if(els.chapterJumpInput)els.chapterJumpInput.value=String(index+1);
   if(els.chapterTotal)els.chapterTotal.textContent=String(total);
   if(els.chapterRange){els.chapterRange.max=String(Math.max(0,total-1));els.chapterRange.value=String(index);}
+  if(els.quickChapterInput)els.quickChapterInput.value=String(index+1); if(els.quickChapterTotal)els.quickChapterTotal.textContent=String(total); if(els.quickPrevChapter)els.quickPrevChapter.disabled=index<=0; if(els.quickNextChapter)els.quickNextChapter.disabled=index>=total-1;
   [els.prevChapter,els.prevChapterBottom].forEach(button=>{if(button)button.disabled=index<=0;});
   [els.nextChapter,els.nextChapterBottom].forEach(button=>{if(button)button.disabled=index>=total-1;});
 }
@@ -182,7 +198,7 @@ function renderChapter() {
   updateChapterControls();
   els.chapterNav.innerHTML=book.chapters.map((c,i)=>'<button class="chapter-chip '+(i===state.currentChapter?'active':'')+'" data-chapter="'+i+'">'+escapeHtml(chapterDisplayTitle(book,c,i))+'</button>').join('');
   els.bookContent.style.setProperty('--reader-size', state.fontSize+'px');
-  els.bookContent.innerHTML='<h2 class="chapter-heading">'+escapeHtml(title)+'</h2>'+chapter.paragraphs.map((p,i)=>'<div class="parallel-para"><p class="paragraph" tabindex="0" data-paragraph="'+i+'">'+escapeHtml(p)+'</p><div class="parallel-slot" data-slot="'+i+'"></div></div>').join('');
+  els.bookContent.innerHTML='<h2 class="chapter-heading">'+escapeHtml(title)+'</h2>'+chapter.paragraphs.map((p,i)=>{const note=state.currentBook.notes?.[state.currentChapter+':'+i]||'';return '<div class="parallel-para"><p class="paragraph" tabindex="0" data-paragraph="'+i+'">'+escapeHtml(p)+'</p><button class="paragraph-note-toggle '+(note?'has-note':'')+'" type="button" data-note-toggle="'+i+'" aria-label="'+(note?'编辑段落笔记':'添加段落笔记')+'">'+(note?'✎ 笔记':'＋ 笔记')+'</button><div class="paragraph-note-editor hidden" data-note-editor="'+i+'"><textarea aria-label="段落笔记" placeholder="写下这段的阅读心得、译法或疑问……">'+escapeHtml(note)+'</textarea><div><button class="button primary compact" type="button" data-note-save="'+i+'">保存笔记</button><button class="button ghost compact" type="button" data-note-cancel="'+i+'">取消</button></div></div><div class="parallel-slot" data-slot="'+i+'"></div></div>';}).join('');
   renderParallel();
   requestAnimationFrame(()=>els.chapterNav.querySelector('.active')?.scrollIntoView({inline:'center',block:'nearest'}));
   window.scrollTo({top:0,behavior:'instant'});
@@ -263,7 +279,7 @@ function selectParagraph(index) {
 }
 function resetAnalysis() { state.followupMessages=[]; els.analysisSetup.classList.remove('hidden'); els.analysisLoading.classList.add('hidden'); els.analysisResult.classList.add('hidden'); els.analysisError.classList.add('hidden'); els.analysisResult.innerHTML=''; els.revealBox.classList.add('hidden'); els.followupBox.classList.add('hidden'); els.followupMessages.innerHTML=''; els.followupInput.value=''; els.followupStatus.textContent=''; els.gradeStatus.classList.add('hidden'); els.gradeResult.classList.add('hidden'); els.gradeResult.innerHTML=''; els.practiceDraft.value=''; }
 function openLayer(element) { element.classList.remove('hidden'); els.backdrop.classList.remove('hidden'); document.body.style.overflow='hidden'; }
-function closeLayer(element) { element.classList.add('hidden'); if (els.analysisSheet.classList.contains('hidden') && els.settingsModal.classList.contains('hidden') && els.vocabSheet.classList.contains('hidden') && els.sentenceSheet.classList.contains('hidden')) { els.backdrop.classList.add('hidden'); document.body.style.overflow=''; } }
+function closeLayer(element) { element.classList.add('hidden'); if (els.analysisSheet.classList.contains('hidden') && els.settingsModal.classList.contains('hidden') && els.vocabSheet.classList.contains('hidden') && els.sentenceSheet.classList.contains('hidden') && els.searchModal.classList.contains('hidden')) { els.backdrop.classList.add('hidden'); document.body.style.overflow=''; } }
 function setConnectionStatus(kind,message) {
   els.connectionStatus.className='notice '+kind;
   els.connectionStatus.textContent=message;
@@ -460,17 +476,33 @@ function ensureDifferentLanguages(changed){if(els.sourceLanguage.value===els.tar
 async function setSourceLanguage(value){state.selectionToken++;els.sourceLanguage.value=value;ensureDifferentLanguages('source');if(state.currentBook){state.currentBook.sourceLanguage=value;await db.put('books',state.currentBook);renderBookList();}savePrefs();renderParallel();}
 function showStorageReminder(){try{const last=Number(safeStorage.getItem('shuliu-backup-reminder')||0);if(Date.now()-last>14*86400000){setTimeout(()=>toast('书籍和学习记录只在本机；请定期在生词本导出备份'),2500);safeStorage.setItem('shuliu-backup-reminder',String(Date.now()));}}catch{}}
 function openLibrary(){els.libraryPanel.classList.add('open');els.backdrop.classList.remove('hidden')}
-function closeLibrary(){els.libraryPanel.classList.remove('open');if(els.analysisSheet.classList.contains('hidden')&&els.settingsModal.classList.contains('hidden')&&els.vocabSheet.classList.contains('hidden')&&els.sentenceSheet.classList.contains('hidden'))els.backdrop.classList.add('hidden')}
+function closeLibrary(){els.libraryPanel.classList.remove('open');if(els.analysisSheet.classList.contains('hidden')&&els.settingsModal.classList.contains('hidden')&&els.vocabSheet.classList.contains('hidden')&&els.sentenceSheet.classList.contains('hidden')&&els.searchModal.classList.contains('hidden'))els.backdrop.classList.add('hidden')}
 
 els.bookInput.addEventListener('change',e=>e.target.files[0]&&importBook(e.target.files[0]));
+function openBookSearch(){if(!state.currentBook)return;els.bookSearchInput.value='';els.searchResults.innerHTML='';els.searchSummary.textContent='搜索本设备已导入的所有书籍，不会调用 API。';openLayer(els.searchModal);setTimeout(()=>els.bookSearchInput.focus(),50);}
+function runBookSearch(){clearTimeout(state.searchTimer);state.searchTimer=setTimeout(()=>{
+ const q=els.bookSearchInput.value.trim().toLocaleLowerCase();if(!q){els.searchResults.innerHTML='';els.searchSummary.textContent='搜索本设备已导入的所有书籍，不会调用 API。';return;}
+ const results=[];
+ for(const book of state.books){for(let c=0;c<book.chapters.length;c++){for(let i=0;i<book.chapters[c].paragraphs.length;i++){const text=book.chapters[c].paragraphs[i];const at=text.toLocaleLowerCase().indexOf(q);if(at>=0){results.push({bookId:book.id,bookTitle:book.title,chapter:c,index:i,text,at});if(results.length>=200)break;}}if(results.length>=200)break;}if(results.length>=200)break;}
+ els.searchSummary.textContent=results.length?`找到 ${results.length}${results.length===200?' 条以上':''} 处（最多显示 200 条）`:'没有找到匹配内容。';
+ els.searchResults.innerHTML=results.map(r=>{const from=Math.max(0,r.at-55),to=Math.min(r.text.length,r.at+q.length+85),snippet=(from?'…':'')+r.text.slice(from,to)+(to<r.text.length?'…':'');const book=state.books.find(x=>x.id===r.bookId);return '<button class="search-result" type="button" data-search-book="'+escapeHtml(r.bookId)+'" data-search-chapter="'+r.chapter+'" data-search-paragraph="'+r.index+'"><strong>'+escapeHtml(r.bookTitle)+' · '+escapeHtml(chapterDisplayTitle(book,book.chapters[r.chapter],r.chapter))+' · 第 '+(r.index+1)+' 段</strong><span>'+escapeHtml(snippet)+'</span></button>';}).join('');
+ },120);}
+els.searchBookButton.addEventListener('click',openBookSearch);els.closeSearch.addEventListener('click',()=>closeLayer(els.searchModal));els.bookSearchInput.addEventListener('input',runBookSearch);
+els.searchResults.addEventListener('click',async e=>{const hit=e.target.closest('[data-search-chapter]');if(!hit)return;const bookId=hit.dataset.searchBook,chapter=Number(hit.dataset.searchChapter),paragraph=Number(hit.dataset.searchParagraph);closeLayer(els.searchModal);if(bookId!==state.currentBook?.id)await openBook(bookId);if(state.currentChapter!==chapter)await switchChapter(chapter);const el=els.bookContent.querySelector('[data-paragraph="'+paragraph+'"]');el?.scrollIntoView({behavior:'smooth',block:'center'});el?.classList.add('search-hit');setTimeout(()=>el?.classList.remove('search-hit'),2200);});
+
 els.demoButton.addEventListener('click',async()=>{try{els.sourceLanguage.value='Chinese';const response=await fetch('./sample.txt');const blob=await response.blob();await importBook(new File([blob],'示例中文书.txt',{type:'text/plain'}))}catch(e){toast('示例载入失败')}});
 els.bookList.addEventListener('click',async e=>{const del=e.target.closest('[data-delete]');if(del){e.stopPropagation();const id=del.dataset.delete;const book=state.books.find(x=>x.id===id);if(confirm('从此设备删除《'+book.title+'》？')){await db.delete('books',id);state.books=state.books.filter(x=>x.id!==id);if(state.currentBook?.id===id){state.currentBook=null;els.readerView.classList.add('hidden');els.emptyState.classList.remove('hidden')}renderBookList()}return}const item=e.target.closest('[data-book]');if(item)openBook(item.dataset.book)});
 els.chapterNav.addEventListener('click',e=>{const b=e.target.closest('[data-chapter]');if(b)switchChapter(Number(b.dataset.chapter))});els.chapterJumpButton?.addEventListener('click',()=>{const total=state.currentBook?.chapters.length||0;const page=Math.max(1,Math.min(total,Number.parseInt(els.chapterJumpInput.value,10)||1));els.chapterJumpInput.value=String(page);switchChapter(page-1);});
 els.chapterJumpInput?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();els.chapterJumpButton.click();}});
 els.chapterRange?.addEventListener('input',()=>{if(els.chapterJumpInput)els.chapterJumpInput.value=String(Number(els.chapterRange.value)+1);});
-els.chapterRange?.addEventListener('change',()=>switchChapter(Number(els.chapterRange.value)));
+els.chapterRange?.addEventListener('change',()=>switchChapter(Number(els.chapterRange.value))); els.quickPrevChapter?.addEventListener('click',()=>switchChapter(state.currentChapter-1)); els.quickNextChapter?.addEventListener('click',()=>switchChapter(state.currentChapter+1)); els.quickJumpButton?.addEventListener('click',()=>{const total=state.currentBook?.chapters.length||0;const page=Math.max(1,Math.min(total,Number.parseInt(els.quickChapterInput.value,10)||1));els.quickChapterInput.value=String(page);switchChapter(page-1);}); els.quickChapterInput?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();els.quickJumpButton.click();}});
 els.prevChapter?.addEventListener('click',()=>switchChapter(state.currentChapter-1));els.nextChapter?.addEventListener('click',()=>switchChapter(state.currentChapter+1));els.prevChapterBottom?.addEventListener('click',()=>switchChapter(state.currentChapter-1));els.nextChapterBottom?.addEventListener('click',()=>switchChapter(state.currentChapter+1));
-els.bookContent.addEventListener('click',e=>{const p=e.target.closest('[data-paragraph]');if(p)selectParagraph(Number(p.dataset.paragraph))});
+els.bookContent.addEventListener('click',async e=>{
+  const save=e.target.closest('[data-note-save]'); if(save){const i=Number(save.dataset.noteSave),editor=els.bookContent.querySelector('[data-note-editor="'+i+'"]'),value=editor.querySelector('textarea').value.trim();state.currentBook.notes ||= {};const key=state.currentChapter+':'+i;if(value)state.currentBook.notes[key]=value;else delete state.currentBook.notes[key];await db.put('books',state.currentBook);renderChapter();toast(value?'段落笔记已保存在本机':'笔记已删除');return;}
+  const cancel=e.target.closest('[data-note-cancel]');if(cancel){const ed=els.bookContent.querySelector('[data-note-editor="'+cancel.dataset.noteCancel+'"]');ed.classList.add('hidden');return;}
+  const toggle=e.target.closest('[data-note-toggle]');if(toggle){const ed=els.bookContent.querySelector('[data-note-editor="'+toggle.dataset.noteToggle+'"]');ed.classList.toggle('hidden');if(!ed.classList.contains('hidden'))ed.querySelector('textarea').focus();return;}
+  const p=e.target.closest('[data-paragraph]');if(p)selectParagraph(Number(p.dataset.paragraph));
+});
 els.bookContent.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-paragraph]')){e.preventDefault();selectParagraph(Number(e.target.dataset.paragraph))}});
 els.bookContent.addEventListener('touchstart',e=>{const touch=e.touches?.[0];if(touch)state.touchStart={x:touch.clientX,y:touch.clientY};},{passive:true});
 els.bookContent.addEventListener('touchend',e=>{const touch=e.changedTouches?.[0],start=state.touchStart;state.touchStart=null;if(!touch||!start||!els.analysisSheet.classList.contains('hidden')||!els.settingsModal.classList.contains('hidden')||!els.vocabSheet.classList.contains('hidden')||!els.sentenceSheet.classList.contains('hidden'))return;const dx=touch.clientX-start.x,dy=touch.clientY-start.y;if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.25)return;if(dx<0)switchChapter(state.currentChapter+1);else switchChapter(state.currentChapter-1);},{passive:true});
@@ -507,8 +539,8 @@ els.testConnection.addEventListener('click',async()=>{saveCurrentApiProfile();el
 els.fontUp.addEventListener('click',()=>{state.fontSize=Math.min(28,state.fontSize+1);safeStorage.setItem('readerFontSize',state.fontSize);renderChapter()});
 els.fontDown.addEventListener('click',()=>{state.fontSize=Math.max(14,state.fontSize-1);safeStorage.setItem('readerFontSize',state.fontSize);renderChapter()});
 els.libraryToggle.addEventListener('click',openLibrary);els.backToBooks.addEventListener('click',openLibrary);els.closeLibrary.addEventListener('click',closeLibrary);
-els.backdrop.addEventListener('click',()=>{closeLibrary();closeLayer(els.analysisSheet);closeLayer(els.settingsModal);closeLayer(els.vocabSheet);closeLayer(els.sentenceSheet)});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLibrary();closeLayer(els.analysisSheet);closeLayer(els.settingsModal);closeLayer(els.vocabSheet);closeLayer(els.sentenceSheet)}});
+els.backdrop.addEventListener('click',()=>{closeLibrary();closeLayer(els.analysisSheet);closeLayer(els.settingsModal);closeLayer(els.vocabSheet);closeLayer(els.sentenceSheet);closeLayer(els.searchModal)});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLibrary();closeLayer(els.analysisSheet);closeLayer(els.settingsModal);closeLayer(els.vocabSheet);closeLayer(els.sentenceSheet);closeLayer(els.searchModal)}});
 
 els.vocabButton.addEventListener('click',async()=>{await refreshVocab();openLayer(els.vocabSheet);});
 els.closeVocab.addEventListener('click',()=>closeLayer(els.vocabSheet));
